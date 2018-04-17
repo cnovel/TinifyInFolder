@@ -28,7 +28,7 @@ Arguments:
 * `-d NUMBER_OF_DAYS`, `--days NUMBER_OF_DAYS`: Only process the images that have been modified in the last `NUMBER_OF_DAYS` days (optional)
 * `--dry_run`: Will run the script but won't perform any compression
 
-The API key can be requested from the [TiniPNG website](https://tinypng.com/developers).
+The API key can be requested from the [TinyPNG website](https://tinypng.com/developers).
 
 ## Examples
 
