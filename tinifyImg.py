@@ -20,22 +20,41 @@ def get_list_images(folder):
     return files
 
 
-def get_remaining_compressions():
-    return 500 - tinify.compression_count
+class Tinifier:
+    class Error(Exception):
+        pass
 
+    def __init__(self, key):
+        self._init = False
+        try:
+            tinify.key = key
+            tinify.validate()
+        except tinify.Error as e:
+            logging.error(e.message)
+            raise Tinifier.Error("Failed to validate key with Tinify")
+        self._init = True
 
-def init_tinify(key):
-    try:
-        tinify.key = key
-        tinify.validate()
-        remaining_compressions = get_remaining_compressions()
-        logging.info("Remaining compressions: " + str(remaining_compressions))
-        if remaining_compressions == 0:
-            logging.error("Compression quota reached for this month!")
-    except tinify.Error as e:
-        logging.error(e.message)
-        return False
-    return True
+    def remaining_free_compressions(self):
+        if not self.is_initialized():
+            raise Tinifier.Error("Tinifier is not initialized")
+        return max(0, 500 - tinify.compression_count)
+
+    def can_perform_free_compressions(self):
+        return self.remaining_free_compressions() > 0
+
+    def is_initialized(self):
+        return self._init
+
+    def compress_image(self, image):
+        if not self.is_initialized():
+            raise Tinifier.Error("Tinifier is not initialized")
+        try:
+            source = tinify.from_file(image)
+            source.to_file(image)
+        except tinify.Error as e:
+            logging.error(image + " failed because " + e.message)
+            return False
+        return True
 
 
 def get_size_images(list_images, power):
@@ -53,7 +72,8 @@ def get_most_recent_action_date(file):
 def get_images_since(number_of_days, list_images):
     days_in_epoch = number_of_days*24*60*60
     cur_time = time.time()
-    return [img for img in list_images if get_most_recent_action_date(img) > cur_time - days_in_epoch]
+    return [img for img in list_images
+            if get_most_recent_action_date(img) > cur_time - days_in_epoch]
 
 
 def main():
@@ -62,10 +82,12 @@ def main():
     logging.basicConfig(format=log_format)
     logging.info("Running tinify script for images in a folder")
     parser = argparse.ArgumentParser(description="Tinify all PNG and JPG in a folder")
-    parser.add_argument("-f", "--folder", dest="folder", help="Folder in which to look for images", required=True)
+    parser.add_argument("-f", "--folder", dest="folder", help="Folder in which to look for images",
+                        required=True)
     parser.add_argument("-k", "--key", dest="key", help="API key for Tinify", required=True)
     parser.add_argument("-d", "--days", dest="number_of_days", type=float,
-                        help="Only process the images that have been modified in the last n days", default=None)
+                        help="Only process the images that have been modified in the last n days",
+                        default=None)
     parser.add_argument("--dry_run", help="No compression will be done", action="store_true")
     parser.add_argument("-v", "--verbose", help="Complete output", action="store_true")
 
@@ -77,7 +99,10 @@ def main():
     if args.dry_run:
         logging.info("This is a dry run")
 
-    if not init_tinify(args.key):
+    try:
+        tinifier = Tinifier(args.key)
+    except Tinifier.Error as e:
+        logging.error(e)
         return 1
 
     list_images = get_list_images(args.folder)
@@ -88,34 +113,33 @@ def main():
         return 0
 
     img_size = get_size_images(list_images, 1)
-    logging.info(str(len(list_images)) + " images to compress, total size is " + str(img_size) + " kb")
+    logging.info(str(len(list_images)) + " images to compress, total size is " + str(img_size) +
+                 " kb")
 
-    remaining_compressions = get_remaining_compressions()
+    remaining_compressions = tinifier.remaining_free_compressions()
     if remaining_compressions < len(list_images):
         logging.warning("Only " + str(remaining_compressions) + " out of " + str(len(list_images)) +
-                        " images will be converted, since monthly quota will be reached during the compressions")
+                        " images will be converted, since monthly quota will be reached during the "
+                        "compressions")
 
     error_count = 0
     uncompressed_count = 0
     for img in list_images:
-        if get_remaining_compressions() > 0:
-            logging.debug("Processing " + img)
-            try:
-                if not args.dry_run:
-                    source = tinify.from_file(img)
-                    source.to_file(img)
-                logging.debug("Processed " + img)
-            except tinify.Error as e:
-                error_count += 1
-                logging.error(img + " failed because " + e.message)
-        else:
+        if not tinifier.can_perform_free_compressions():
             uncompressed_count += 1
-            logging.warning("No more compressions, can't compress " + img)
+            logging.warning("No more free compressions, can't compress " + img)
+            continue
+        logging.debug("Processing " + img)
+        if not args.dry_run and not tinifier.compress_image(img):
+            error_count += 1
+        else:
+            logging.debug(img + " processed")
 
     if error_count > 0:
         logging.warning(str(error_count) + " error(s) during processing")
     elif uncompressed_count > 0:
-        logging.warning(str(uncompressed_count) + " images skipped because there are no remaining compressions left")
+        logging.warning(str(uncompressed_count) + " images skipped because there are no remaining "
+                                                  "compressions left")
     else:
         logging.info("No errors during processing")
 
@@ -123,7 +147,7 @@ def main():
     reduction = 100*(1 - new_size/img_size)
     reduction = float(int(reduction*10))/10.
     logging.info("Total size is " + str(new_size) + " kb, " + str(reduction) + "% lighter")
-    logging.info("Remaining compressions: " + str(get_remaining_compressions()))
+    logging.info("Remaining compressions: " + str(tinifier.remaining_free_compressions()))
 
     return 0
 
