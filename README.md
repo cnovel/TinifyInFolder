@@ -18,7 +18,7 @@ All of these should already be installed since they are fairly standard, except 
 
 The script is fairly simple.
 
-Usage: `tinifyImg.py [-h] -f FOLDER -k KEY [-d NUMBER_OF_DAYS] [--dry_run]`    
+Usage: `tinifyImg.py [-h] -f FOLDER -k KEY [-d NUMBER_OF_DAYS] [-v] [--dry_run]`    
 
 Arguments:                        
 
@@ -27,6 +27,7 @@ Arguments:
 * `-k KEY`, `--key KEY`: API key for Tinify service (required)
 * `-d NUMBER_OF_DAYS`, `--days NUMBER_OF_DAYS`: Only process the images that have been modified in the last `NUMBER_OF_DAYS` days (optional)
 * `--dry_run`: Will run the script but won't perform any compression
+* `-v`, `--verbose`: Will show complete output
 
 The API key can be requested from the [TinyPNG website](https://tinypng.com/developers).
 
