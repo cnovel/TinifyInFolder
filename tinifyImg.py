@@ -1,7 +1,7 @@
 """
 @author = Cyril NOVEL
 @license = Unlicense
-@version = 0.2
+@version = 0.3
 @description = Tinify all images in a folder
 """
 
@@ -67,8 +67,12 @@ def main():
     parser.add_argument("-d", "--days", dest="number_of_days", type=float,
                         help="Only process the images that have been modified in the last n days", default=None)
     parser.add_argument("--dry_run", help="No compression will be done", action="store_true")
+    parser.add_argument("-v", "--verbose", help="Complete output", action="store_true")
 
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     if args.dry_run:
         logging.info("This is a dry run")
@@ -92,20 +96,26 @@ def main():
                         " images will be converted, since monthly quota will be reached during the compressions")
 
     error_count = 0
-    if not args.dry_run:
-        for img in list_images:
-            if get_remaining_compressions() > 0:
-                logging.debug("Processing " + img)
-                try:
+    uncompressed_count = 0
+    for img in list_images:
+        if get_remaining_compressions() > 0:
+            logging.debug("Processing " + img)
+            try:
+                if not args.dry_run:
                     source = tinify.from_file(img)
                     source.to_file(img)
-                    logging.debug("Processed " + img)
-                except tinify.Error as e:
-                    error_count += 1
-                    logging.error(img + " failed because " + e.message)
+                logging.debug("Processed " + img)
+            except tinify.Error as e:
+                error_count += 1
+                logging.error(img + " failed because " + e.message)
+        else:
+            uncompressed_count += 1
+            logging.warning("No more compressions, can't compress " + img)
 
     if error_count > 0:
         logging.warning(str(error_count) + " error(s) during processing")
+    elif uncompressed_count > 0:
+        logging.warning(str(uncompressed_count) + " images skipped because there are no remaining compressions left")
     else:
         logging.info("No errors during processing")
 
